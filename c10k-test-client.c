@@ -1,5 +1,5 @@
 // HTTP client for testing high connection concurrency
-// Authors: Richard Jones and Rasmus Andersson
+// Authors: Richard Jones and Rasmus Andersson and Josh Enders
 // Released in the public domain. No restrictions, no support.
 #include <sys/types.h>
 #include <sys/time.h>
@@ -54,23 +54,26 @@ void reqcb(struct evhttp_request * req, void * arg) {
 }
 
 int main(int argc, char * const *argv) {
+    if (argc > 1 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
+        fprintf(stderr, "%s <connections> <host> <address> <port> <uri>\n", argv[0]);
+        return 1;
+    }
+
     event_init();
     struct evhttp_connection *evhttp_connection;
     struct evhttp_request *evhttp_request;
     //char addr[16];
-    const char *remote_addr = "217.213.5.37";
-    int remote_port = 8088;
-    const char *uri = "/msgq/listen?channel=pb";
+    const char *host = "localhost";
+    const char *remote_addr = "127.0.0.1";
+    int remote_port = 80;
+    const char *uri = "/";
 
-    if (argc > 1 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
-        fprintf(stderr, "%s [connections[ address[ port[ uri]]]]\n", argv[0]);
-        return 1;
-    }
-
+    // lazy argument parsing
     if (argc > 1) num_conns = atoi(argv[1]);
-    if (argc > 2) remote_addr = argv[2];
-    if (argc > 3) remote_port = atoi(argv[3]);
-    if (argc > 4) uri = argv[4];
+    if (argc > 2) host = argv[2];
+    if (argc > 3) remote_addr = argv[3];
+    if (argc > 4) remote_port = atoi(argv[4]);
+    if (argc > 5) uri = argv[5];
 
     if (num_conns > 65536) {
         // see http://www.mail-archive.com/libevent-users@monkey.org/msg01302.html
@@ -80,7 +83,7 @@ int main(int argc, char * const *argv) {
         exit(1);
     }
 
-    printf("Making %d connections to http://%s:%d%s\n", num_conns, remote_addr, remote_port, uri);
+    printf("Making %d connections to http://%s:%d%s Host: %s\n", num_conns, remote_addr, remote_port, uri, host);
 
     int i;
 
@@ -89,7 +92,7 @@ int main(int argc, char * const *argv) {
         evhttp_set_timeout((struct evhttp *)evhttp_connection, 864000); // 10 day timeout
         evhttp_request = evhttp_request_new(reqcb, NULL);
         evhttp_request->chunk_cb = chunkcb;
-        evhttp_add_header(evhttp_request->output_headers, "Host", "hunch.se");
+        evhttp_add_header(evhttp_request->output_headers, "Host", host);
         evhttp_add_header(evhttp_request->output_headers, "Connection", "close");
         evhttp_make_request(evhttp_connection, evhttp_request, EVHTTP_REQ_GET, uri);
         connected++;
@@ -112,4 +115,6 @@ int main(int argc, char * const *argv) {
     return 0;
 }
 
-// gcc -o floodtest -levent -I/opt/local/include -L/opt/local/lib floodtest.c
+// on Mac OS X 10.8.2
+// sudo port install libevent
+// export CC=/usr/bin/gcc; gcc -o c10k-test-client -l event -I /opt/local/include/ -L /opt/local/lib/ c10k-test-client.c
