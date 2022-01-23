@@ -6,10 +6,13 @@
 #include <sys/queue.h>
 #include <stdlib.h>
 #include <err.h>
-#include <event.h>
-#include <evhttp.h>
+#include <event2/buffer.h>
+#include <event2/event.h>
+#include <event2/http.h>
+#include <event2/http_struct.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <time.h>
@@ -17,6 +20,7 @@
 
 #define BUFSIZE 4096
 #define SLEEP_MS 10
+
 
 // options
 int num_conns = 100;
@@ -44,7 +48,7 @@ void chunkcb(struct evhttp_request * req, void * arg) {
 void reqcb(struct evhttp_request * req, void * arg) {
     int s = evbuffer_remove( req->input_buffer, &buf, BUFSIZE );
     bytes_recvd += s;
-    chunks_recvd++;
+    //chunks_recvd++;
 
     if (connected-closed > max_concurrency)
         max_concurrency = connected-closed;
@@ -54,14 +58,20 @@ void reqcb(struct evhttp_request * req, void * arg) {
 }
 
 int main(int argc, char * const *argv) {
+
+    struct event_base *base;    
+
     if (argc > 1 && (strcmp(argv[1], "-h") == 0 || strcmp(argv[1], "--help") == 0)) {
         fprintf(stderr, "%s <connections> <host> <address> <port> <uri>\n", argv[0]);
         return 1;
-    }
+    }    
 
-    event_init();
+    base = event_base_new();
+
+    //event_init();
     struct evhttp_connection *evhttp_connection;
     struct evhttp_request *evhttp_request;
+
     //char addr[16];
     const char *host = "localhost";
     const char *remote_addr = "127.0.0.1";
@@ -88,7 +98,7 @@ int main(int argc, char * const *argv) {
     int i;
 
     for (i=1;i<=num_conns;i++) {
-        evhttp_connection = evhttp_connection_new(remote_addr, remote_port);
+        evhttp_connection = evhttp_connection_base_new(base, NULL, remote_addr, remote_port);
         evhttp_set_timeout((struct evhttp *)evhttp_connection, 864000); // 10 day timeout
         evhttp_request = evhttp_request_new(reqcb, NULL);
         evhttp_request->chunk_cb = chunkcb;
@@ -99,18 +109,22 @@ int main(int argc, char * const *argv) {
         if ( i % 100 == 0)
             printf("%d requests sent (%d connected)\n", i, connected-closed);
         evhttp_connection_set_timeout(evhttp_request->evcon, 864000);
-        event_loop( EVLOOP_NONBLOCK );
+        event_base_loop(base, EVLOOP_NONBLOCK);
         usleep(SLEEP_MS*1000);
     }
 
     printf("All %d requests sent (%d connected).\n", num_conns, connected);
 
-    event_dispatch();
+    event_base_dispatch(base);
+
 
     printf("All connections are closed.\n");
     printf("connections: %d\tBytes: %d\tChunks: %d\tClosed: %d\n", num_conns, bytes_recvd, chunks_recvd, closed);
     printf("Completed: %d\tFailed: %d\n", responses_completed_ok, num_conns-chunks_recvd);
     printf("Max concurrency: %d\n", max_concurrency);
+
+    
+    event_base_free(base);
 
     return 0;
 }
