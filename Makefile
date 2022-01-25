@@ -1,7 +1,7 @@
 
 
-CFLAGS = -Wall 
-LDLIBS = -levent
+CFLAGS = -Wall -I/home/isodden/work/libevent/include
+LDLIBS = -levent -L/home/isodden/work/libevent/.libs
 
 LINUX_EXE =  c10k-test-client 
 
