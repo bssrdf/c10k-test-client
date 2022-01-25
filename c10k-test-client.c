@@ -66,6 +66,8 @@ int main(int argc, char * const *argv) {
         return 1;
     }    
 
+    event_enable_debug_logging(EVENT_DBG_ALL);
+
     base = event_base_new();
 
     //event_init();
@@ -109,7 +111,10 @@ int main(int argc, char * const *argv) {
         if ( i % 100 == 0)
             printf("%d requests sent (%d connected)\n", i, connected-closed);
         evhttp_connection_set_timeout(evhttp_request->evcon, 864000);
-        event_base_loop(base, EVLOOP_NONBLOCK);
+        event_base_loop(base, EVLOOP_NONBLOCK); // EVLOOP_NONBLOCK is set, then the loop will not wait 
+                                                // for events to trigger: it will only check whether any 
+                                                // events are ready to trigger immediately, and run 
+                                                // their callbacks if so.
         usleep(SLEEP_MS*1000);
     }
 
